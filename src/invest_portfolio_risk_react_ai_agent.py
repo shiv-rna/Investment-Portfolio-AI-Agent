@@ -11,7 +11,7 @@ Dependencies:
 - dataclasses
 
 Author: Shivang Rana
-Created: 11-25-2024
+Created: 11-27-2024
 Version: 1.0.0
 """
 
@@ -19,11 +19,12 @@ import os
 import json
 import re
 import logging
-from typing import Dict, List, Any, Optional, Union
-from dataclasses import dataclass, asdict
+from typing import Dict, List, Any
+from dataclasses import dataclass
 
 import dotenv
 from groq import Groq
+
 
 # Configure logging
 logging.basicConfig(
@@ -34,6 +35,7 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
 logger = logging.getLogger(__name__)
 
 # Load environment variables
@@ -61,6 +63,7 @@ class StockData:
     estimated_risk: str
     avg_annual_return: float
 
+
 class FinancialTools:
     """
     Comprehensive financial analysis toolkit for investment portfolios
@@ -73,7 +76,7 @@ class FinancialTools:
         """
         Initialize FinancialTools by loading stock data.
         """
-        self.STOCK_DATA = self.load_stock_data()
+        self.loaded_stock_data = self.load_stock_data()
 
     def load_stock_data(self, file_path: str = 'stock-risk-profile-json.json') -> Dict[str, StockData]:
         """
@@ -114,7 +117,7 @@ class FinancialTools:
         total_allocation = sum(portfolio.values())
 
         for stock, allocation in portfolio.items():
-            stock_info = self.STOCK_DATA.get(stock, {})
+            stock_info = self.loaded_stock_data.get(stock, {})
             if stock_info:
                 sector = stock_info.sector
                 risk_level = stock_info.estimated_risk
@@ -124,13 +127,13 @@ class FinancialTools:
 
             sectors[sector] = sectors.get(sector, 0) + allocation
             risk_levels[risk_level] = risk_levels.get(risk_level, 0) + allocation
-        
+
         return {
             "total_allocation": total_allocation,
             "sector_breakdown": sectors,
             "risk_level_breakdown": risk_levels
         }
-    
+
     def calculate_expected_portfolio_return(self, portfolio: Dict[str, float]) -> float:
         """
         Calculate expected annual return of the portfolio.
@@ -143,7 +146,7 @@ class FinancialTools:
         """
         total_return = 0
         for stock, allocation in portfolio.items():
-            stock_info = self.STOCK_DATA.get(stock, {})
+            stock_info = self.loaded_stock_data.get(stock, {})
             if stock_info:
                 avg_return = stock_info.avg_annual_return
             else:
@@ -215,10 +218,10 @@ class FinancialTools:
         Returns:
             Dict[str, Any]: Comprehensive stock risk profile.
         """
-        stock_data = self.STOCK_DATA.get(stock_symbol, {})
+        stock_data = self.loaded_stock_data.get(stock_symbol, {})
         if not stock_data:
             return {"Error": f"Stock symbol {stock_symbol} not found in dataset."}
-        
+
         risk_explanations = {
             "Very High": "Extremely volatile with potential for significant gains or losses.",
             "High": "Significant price volatility and potential for substantial price swings.",
@@ -226,7 +229,7 @@ class FinancialTools:
             "Medium-Low": "Relatively stable with some price variations.",
             "Low": "Minimal price volatility, typically large, established companies with consistent performance."
         }
-        
+
         return {
             "Name": stock_data.name,
             "Sector": stock_data.sector,
@@ -242,6 +245,7 @@ class Agent:
     """
     Investment portfolio analysis agent with interactive capabilities.
     """
+
     def __init__(self, client, system, financial_tools):
         """
         Initialize the agent with Groq client and system prompt.
@@ -249,15 +253,16 @@ class Agent:
         Args:
             client: Groq API client
             system (str): System prompt for guiding agent behavior
+            financial_tools (FinancialTools): Financial tools helper
         """
         self.client = client
         self.system = system
         self.messages = []
         self.financial_tools = financial_tools
-        
+
         if self.system is not None:
             self.messages.append({"role": "system", "content": self.system})
-    
+
     def __call__(self, message=""):
         """
         Execute agent interaction.
@@ -272,7 +277,7 @@ class Agent:
             self.messages.append({"role": "user", "content": message})
         result = self.execute()
         return result
-    
+
     def execute(self):
         """
         Execute Groq API call to generate agent response.
@@ -293,7 +298,7 @@ class Agent:
             return "Error: Unable to process your agent execute request at this time"
 
 
-def load_system_prompt(file_path: str = 'system_prompt.txt') -> str:
+def load_system_prompt(file_path: str = 'system_prompt_v1.txt') -> str:
     """
     Load system prompt from a text file
 
@@ -305,11 +310,12 @@ def load_system_prompt(file_path: str = 'system_prompt.txt') -> str:
     """
     file_path = os.getenv("SYS_PROMPT_DATA_PATH", file_path)
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             return f.read().strip()
     except FileNotFoundError:
         logger.warning("System prompt file not found. Using default.")
         return """You are an Investment Portfolio Analysis Agent..."""
+
 
 def execute_tool_action(chosen_tool, args_str, financial_tools):
     """
@@ -389,24 +395,18 @@ def agent_loop(max_iterations, system_prompt, query):
     client = Groq(api_key=api_key)
     financial_tools = FinancialTools()
     agent = Agent(client, system_prompt, financial_tools)
-    
-    tools = [
-        'analyze_portfolio_diversification', 
-        'calculate_expected_portfolio_return', 
-        'recommend_portfolio_adjustments',
-        'get_stock_risk_profile'
-    ]
-    
+
     next_prompt = query
-    
-    for _ in range(max_iterations):
+    for iteration in range(max_iterations):
         result = agent(next_prompt)
+        print(f"\n{'='*50}")
+        print(f"Iteration {iteration + 1}:")
         print(result)
 
         # Check if the response contains 'Answer' and break the loop
         if "Answer" in result:
             break
-        
+
         # Process any requested tool actions
         if "PAUSE" in result and "Action" in result:
             action_match = re.search(r"Action: ([a-z_]+): (.+)", result, re.IGNORECASE)
@@ -421,14 +421,7 @@ def main():
     """
     Main execution function demonstrating investment analysis capabilities.
     """
-    
-    # Initialize financial tools
-    financial_tools = FinancialTools()
-    print("Loading system prompt")
-    system_prompt = load_system_prompt('system_prompt.txt')
-    print("Initiating Agent loop")
-    # agent_loop(max_iterations=5, system_prompt=system_prompt, query="Get risk profile for NVDA stock")
-    # agent_loop(max_iterations=5, system_prompt=system_prompt, query="Recommend adjustments for a portfolio with 50% MRNA, 30% JNJ, 20% SPY with low risk tolerance")
+    system_prompt = load_system_prompt('system_prompt_v1.txt')
     agent_loop(max_iterations=5, system_prompt=system_prompt, query="I want to analyze a portfolio with 40% AAPL, 30% GOOGL, 30% SPY")
 
 if __name__ == "__main__":
