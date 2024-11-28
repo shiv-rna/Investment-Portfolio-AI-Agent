@@ -1,1 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Environment
 .env
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# Streamlit
+.streamlit/
+
+# Misc
+.DS_Store
+/WIP

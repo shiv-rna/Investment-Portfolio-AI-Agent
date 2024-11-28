@@ -1,4 +1,5 @@
 groq
+streamlit
 python-dotenv
 typing-extensions
 dataclasses
