@@ -1,0 +1,4 @@
+groq
+python-dotenv
+typing-extensions
+dataclasses
