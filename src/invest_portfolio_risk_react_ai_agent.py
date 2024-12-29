@@ -9,6 +9,7 @@ Dependencies:
 - python-dotenv
 - typing
 - dataclasses
+- pathlib
 
 Author: Shivang Rana
 Created: 11-27-2024
@@ -21,6 +22,7 @@ import re
 import logging
 from typing import Dict, List, Any
 from dataclasses import dataclass
+from pathlib import Path
 
 import dotenv
 from groq import Groq
@@ -368,22 +370,27 @@ class Agent:
             return "Error: Unable to process your agent execute request at this time"
 
 
-def load_system_prompt(file_path: str = 'system_prompt_v1.txt') -> str:
+def load_system_prompt(file_name: str = 'system_prompt_v1.txt') -> str:
     """
     Load system prompt from a text file
 
     Args:
-        file_path (str): File path to system prompt txt file
+        file_name (str): File path to system prompt txt file
     
     Returns:
         str: system_prompt
     """
-    file_path = os.getenv("SYS_PROMPT_DATA_PATH", file_path)
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return f.read().strip()
+        # Get the current file's directory
+        current_dir = Path(__file__).parent
+        prompt_path = current_dir / file_name
+        
+        return prompt_path.read_text(encoding='utf-8').strip()
     except FileNotFoundError:
         logger.warning("System prompt file not found. Using default.")
+        return """You are an Investment Portfolio Analysis Agent..."""
+    except Exception as e:
+        logger.error(f"Error loading system prompt: {str(e)}")
         return """You are an Investment Portfolio Analysis Agent..."""
 
 

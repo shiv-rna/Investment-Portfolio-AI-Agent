@@ -31,6 +31,7 @@ import logging
 import re
 from typing import Dict, Any
 import json
+from pathlib import Path
 
 import streamlit as st
 
@@ -47,7 +48,7 @@ from invest_portfolio_risk_react_ai_agent import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def load_stock_data(file_path='stock-risk-profile-json.json'):
+def load_stock_data(): 
     """
     Load stock data from the JSON file.
     
@@ -58,9 +59,15 @@ def load_stock_data(file_path='stock-risk-profile-json.json'):
         dict: Dictionary of stock information
     """
     try:
-        with open(file_path, 'r') as file:
+        # Get the current file's directory
+        current_dir = Path(__file__).parent
+        
+        # Construct path to JSON file
+        json_path = current_dir / 'stock-risk-profile-json.json'
+        
+        with json_path.open('r') as file:
             stock_data = json.load(file)
-        return stock_data['stocks']
+            return stock_data['stocks']
     except FileNotFoundError:
         st.error(f"Stock data file not found at {file_path}")
         return {}
