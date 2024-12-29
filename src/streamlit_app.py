@@ -30,6 +30,7 @@ import sys
 import logging
 import re
 from typing import Dict, Any
+import json
 
 import streamlit as st
 
@@ -46,9 +47,35 @@ from invest_portfolio_risk_react_ai_agent import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def display_sidebar() -> str:
+def load_stock_data(file_path='stock-risk-profile-json.json'):
     """
-    Create a sidebar with tool capabilities and API key input.
+    Load stock data from the JSON file.
+    
+    Args:
+        file_path (str): Path to the JSON file containing stock data
+    
+    Returns:
+        dict: Dictionary of stock information
+    """
+    try:
+        with open(file_path, 'r') as file:
+            stock_data = json.load(file)
+        return stock_data['stocks']
+    except FileNotFoundError:
+        st.error(f"Stock data file not found at {file_path}")
+        return {}
+    except json.JSONDecodeError:
+        st.error(f"Error decoding JSON from {file_path}")
+        return {}
+
+        
+def display_sidebar(stocks) -> str:
+    """
+    Create a sidebar with API key input.
+    Add a stock list display to the Streamlit sidebar.
+
+    Args:
+        stocks (dict): Dictionary of stock information
 
     Returns:
         str: The entered Groq API key.
@@ -63,27 +90,28 @@ def display_sidebar() -> str:
         help="Your Groq API key for AI interactions"
     )
 
-    st.sidebar.markdown("""
-    ### Tool Capabilities 🚀
+    # Sidebar section for supported stocks
+    st.sidebar.header("🏛 Supported Stocks")
+    
+    # Group stocks by sector
+    sectors = {}
+    for ticker, stock_info in stocks.items():
+        sector = stock_info['sector']
+        if sector not in sectors:
+            sectors[sector] = []
+        sectors[sector].append((ticker, stock_info['name']))
+    
+    # Create an expander for each sector
+    for sector, stock_list in sorted(sectors.items()):
+        with st.sidebar.expander(f"{sector} Stocks"):
+            stock_display = "\n".join([f"{ticker}: {name}" for ticker, name in sorted(stock_list)])
+            st.text(stock_display)
+    
+    # Total stocks and sectors summary
+    st.sidebar.markdown("---")
+    st.sidebar.metric("Total Supported Stocks", len(stocks))
+    st.sidebar.metric("Total Sectors", len(sectors))
 
-    This AI-powered investment tool provides:
-
-    1. **Stock Risk Profile**
-       - Detailed risk assessment for individual stocks
-       - Key metrics like volatility, market cap, and return potential
-
-    2. **Portfolio Diversification Analysis**
-       - Sector and risk level breakdown
-       - Allocation insights
-
-    3. **Portfolio Return Calculation**
-       - Estimated annual return calculation
-       - Based on historical stock performance
-
-    4. **Portfolio Adjustment Recommendations**
-       - Personalized recommendations
-       - Aligned with your risk tolerance
-    """)
 
     return api_key
 
@@ -120,7 +148,7 @@ def capture_output(max_iterations: int, system_prompt: str, query: str, api_key:
         full_output = output_buffer.getvalue()
 
         # Extract the Answer section
-        answer_match = re.search(r'Answer:(.*)', full_output, re.DOTALL | re.IGNORECASE)
+        answer_match = re.search(r'(?:\*\*Answer\*\*|Answer):(.*)', full_output, re.DOTALL | re.IGNORECASE)
         if answer_match:
             final_answer = answer_match.string[answer_match.start():].lstrip('Answer:').strip()
         else:
@@ -164,12 +192,14 @@ def main():
 
     st.title("🤖 Investment Portfolio Risk Assessment ReAct AI Agent")
 
-    api_key = display_sidebar()
+    stocks = load_stock_data()
+
+    api_key = display_sidebar(stocks)
     if not api_key:
         st.warning("Please enter your Groq API Key to continue.")
         return
 
-    system_prompt = load_system_prompt('system_prompt_v1.txt')
+    system_prompt = load_system_prompt()
 
     st.markdown("### Example Queries")
     st.markdown("Select a predefined query or enter your own below:")
@@ -190,7 +220,7 @@ def main():
         placeholder="E.g., Get risk profile for NVDA, Analyze portfolio with 40% AAPL, 30% GOOGL, 30% SPY"
     )
 
-    if st.button("Get Investment Insights"):
+    if st.button("Get Investment Insights🔍"):
         if not query:
             st.error("Please select an example query or enter your own")
             return
@@ -215,6 +245,30 @@ def main():
             except Exception as e:
                 logger.error(f"Error in main function: {str(e)}")
                 st.error(f"An error occurred: {str(e)}")
+    
+    if st.button("Get Tool Capabilities🔨"):
+        st.markdown("""
+        ### Tool Capabilities 🚀
+
+        This AI-powered investment tool provides:
+
+        1. **Stock Risk Profile**
+            - Detailed risk assessment for individual stocks
+            - Key metrics like volatility, market cap, and return potential
+
+        2. **Portfolio Diversification Analysis**
+            - Sector and risk level breakdown
+            - Allocation insights
+
+        3. **Portfolio Return Calculation**
+            - Estimated annual return calculation
+            - Based on historical stock performance
+
+        4. **Portfolio Adjustment Recommendations**
+            - Personalized recommendations
+            - Aligned with your risk tolerance
+        """)
+
 
 if __name__ == "__main__":
     main()

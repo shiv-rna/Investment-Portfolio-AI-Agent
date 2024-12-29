@@ -116,22 +116,48 @@ class FinancialTools:
         risk_levels = {}
         total_allocation = sum(portfolio.values())
 
+        # Calculate portfolio beta and volatility
+        portfolio_beta = 0
+        portfolio_volatility = 0
+
         for stock, allocation in portfolio.items():
             stock_info = self.loaded_stock_data.get(stock, {})
             if stock_info:
                 sector = stock_info.sector
                 risk_level = stock_info.estimated_risk
-            else:
-                sector = 'Unknown'
-                risk_level = 'Unknown'
+                weight = allocation/ total_allocation
 
-            sectors[sector] = sectors.get(sector, 0) + allocation
-            risk_levels[risk_level] = risk_levels.get(risk_level, 0) + allocation
+                sectors[sector] = sectors.get(sector, 0) + allocation
+                risk_levels[risk_level] = risk_levels.get(risk_level, 0) + allocation
+
+                # Weighted beta and volatility
+                portfolio_beta += stock_info.beta * weight
+                portfolio_volatility += stock_info.volatility_index * weight
+        
+        # Calculate Herfindahl-Hirschman Index (HHI)
+        sector_hhi = sum((v/total_allocation)**2 for v in sectors.values())
+
+        hhi_thresholds = {
+            "highly_diversified": 0.15,
+            "moderately_concentrated": 0.25,
+        }
+
+        hhi_interpretation = (
+            "Highly Diversified" if sector_hhi < hhi_thresholds["highly_diversified"]
+            else "Moderately Concentrated" if sector_hhi <= hhi_thresholds["moderately_concentrated"]
+            else "Highly Concentrated"
+        )
 
         return {
             "total_allocation": total_allocation,
             "sector_breakdown": sectors,
-            "risk_level_breakdown": risk_levels
+            "risk_level_breakdown": risk_levels,
+            "portfolio_metrics":{
+                "portfolio_beta": round(portfolio_beta, 2),
+                "portfolio_volatility": round(portfolio_volatility, 2),
+                "sector_concentration_hhi": round(sector_hhi, 2),
+                "hhi_interpretation": hhi_interpretation,
+            }
         }
 
     def calculate_expected_portfolio_return(self, portfolio: Dict[str, float]) -> float:
@@ -165,46 +191,66 @@ class FinancialTools:
         Returns:
             List[str]: Recommended portfolio adjustments.
         """
+        if not portfolio or sum(portfolio.values()) == 0:
+            return ["Portfolio is empty or allocations sum to zero. Please review the input."]
+
         current_analysis = self.analyze_portfolio_diversification(portfolio)
         recommendations = []
 
-        # Risk Mapping based on real-world risk levels
-        risk_mapping = {
-            "low": ["SPY", "VTI", "JNJ", "PFE", "JPM"], # Conservative, stable stocks
-            "medium": ["AAPL", "GOOGL", "MSFT", "QQQ", "BAC", "XOM"], # Established, moderate growth stocks
-            "high": ["NVDA", "MRNA", "COIN"], # High Growth, high volatility stocks
+        # Define target allocations based on risk tolerance
+        target_allocations = {
+            "low": {"Low": 60, "Medium":30, "High": 10},
+            "medium": {"Low": 30, "Medium":50, "High": 20},
+            "high": {"Low": 10, "Medium":40, "High": 50},
         }
+        target_risk = target_allocations.get(risk_tolerance, {})
+        if not target_risk:
+            return [f"Invalid risk tolerance: {risk_tolerance}. Choose from 'low', 'medium', or 'high'."]
 
-        # Detailed recommendation logic
-        current_sectors = current_analysis['sector_breakdown']
-        current_risk_levels = current_analysis['risk_level_breakdown']
+        # Portfolio metrics analysis
+        portfolio_metrics = current_analysis["portfolio_metrics"]
+        sector_concentration = portfolio_metrics["sector_concentration_hhi"]
 
-        # Low-risk tolerance recommendations
-        if risk_tolerance == "low":
-            if current_risk_levels.get('High', 0) > 20:
-                recommendations.append("Significantly reduce exposure to high-risk stocks")
-            if any(stock in risk_mapping['high'] for stock in portfolio):
-                recommendations.append("Remove high-volatility stocks from the portfolio")
-            recommendations.append("Consider increasing allocation to stable sectors like Index Funds and Healthcare")
+        # For sector threshold allocations
+        sector_benchmarks = {"Technology": 28, "Healthcare": 15, "Energy": 8, "Financials": 12} # Based on S&P 500
+        risk_tolerance_thresholds = {"low": 20, "medium": 30, "high": 40}
+        sector_volatility = {"Technology": 0.25, "Healthcare": 0.15, "Energy": 0.30, "Financials": 0.20}
+        threshold = risk_tolerance_thresholds.get(risk_tolerance, 30)
 
-        # Medium-risk tolerance recommendations
-        elif risk_tolerance == "medium":
-            if current_risk_levels.get('High', 0) > 30:
-                recommendations.append("Rebalance portfolio to reduce high-risk stock exposure")
-            if sum(1 for stock in portfolio if stock in risk_mapping['high']) > 2:
-                recommendations.append("Limit the number of high-risk stocks to maintain portfolio stability")
-            recommendations.append("Maintain a balanced mix of technology, financial, and index fund stocks")
+        # Concentration Warnings
+        if sector_concentration > 0.45:
+            recommendations.append(f"High sector concentration detected (HHI: {sector_concentration:.2f}). Consider diversifying across sectors")
+            # Specific sector suggestions
+            for sector, allocation in current_analysis["sector_breakdown"].items():
+                sector_pct = (allocation / current_analysis["total_allocation"]) * 100
+                benchmark_weight = sector_benchmarks.get(sector, 10)
+                volatility = sector_volatility.get(sector, 0.2)
+                
+                # Final adaptive threshold
+                adaptive_threshold = min(
+                    threshold,
+                    benchmark_weight * 1.2,
+                    40 - (volatility * 100)  # Adjust for volatility
+                )
+ 
+                if sector_pct > adaptive_threshold:
+                    recommendations.append(f"Reduce exposure to {sector} (currently {sector_pct:.1f}%, target ≤ {adaptive_threshold:.1f}%).")
+                    
+        # Risk allocation analysis
+        current_risk_levels = current_analysis["risk_level_breakdown"]
+        for risk_level, target_pct in target_risk.items():
+            current_pct = (current_risk_levels.get(risk_level, 0) / current_analysis["total_allocation"]) * 100
+            if abs(current_pct - target_pct) > 15:
+                if current_pct > target_pct:
+                    recommendations.append(f"Reduce {risk_level} - risk allocation from {current_pct:.1f}% to near {target_pct}%.")
+                else:
+                    recommendations.append(f"Increase {risk_level} - risk allocation from {current_pct:.1f}% to near {target_pct}%.")
 
-        # High-risk tolerance recommendations
-        elif risk_tolerance == "high":
-            if current_risk_levels.get('Low', 0) > 40:
-                recommendations.append("Consider increasing exposure to high-growth stocks")
-            recommendations.append("Explore opportunities in emerging technologies and speculative sectors")
-            recommendations.append("Be prepared for higher volatility and potential higher returns")
-
-        # Sector diversification check
-        if len(current_sectors) < 3:
-            recommendations.append("Improve portfolio diversification by adding stocks from different sectors")
+        # Beta threshold recommendations
+        portfolio_beta = portfolio_metrics["portfolio_beta"]
+        beta_threshold = {"low": 1.0, "medium": 1.2, "high":1.5}
+        if portfolio_beta > beta_threshold[risk_tolerance]:
+            recommendations.append(f" Portfolio beta ({portfolio_beta:.2f}) exceeds target for {risk_tolerance} risk tolerance. Reduce high-beta stocks")       
 
         return recommendations
 
@@ -216,29 +262,53 @@ class FinancialTools:
             stock_symbol (str): Stock symbol to retrieve risk profile for.
 
         Returns:
-            Dict[str, Any]: Comprehensive stock risk profile.
+            Dict[str, Any]: Comprehensive stock risk profile with advanced metrics.
         """
         stock_data = self.loaded_stock_data.get(stock_symbol, {})
         if not stock_data:
-            return {"Error": f"Stock symbol {stock_symbol} not found in dataset."}
+            similar_stocks = [symbol for symbol in self.loaded_stock_data.keys() if stock_data.lower in symbol.lower]
+            return {
+                "Error": f"Stock symbol {stock_symbol} not found in dataset.",
+                "Suggestions": similar_stocks[:3] if similar_stocks else "No similar stocks found."
+            }
 
-        risk_explanations = {
-            "Very High": "Extremely volatile with potential for significant gains or losses.",
-            "High": "Significant price volatility and potential for substantial price swings.",
-            "Medium": "Moderate price fluctuations with balanced growth potential.",
-            "Medium-Low": "Relatively stable with some price variations.",
-            "Low": "Minimal price volatility, typically large, established companies with consistent performance."
-        }
+        risk_explanation = (
+        f"{'High' if stock_data.volatility_index > 0.35 else 'Moderate' if stock_data.volatility_index > 0.2 else 'Low'} "
+        f"volatility stock with an estimated risk level of {stock_data.estimated_risk}. Suitable for "
+        f"{'aggressive' if stock_data.volatility_index > 0.35 else 'moderate' if stock_data.volatility_index > 0.2 else 'conservative'} investors."
+    )
+
+        relative_market_size = "Large Cap" if stock_data.market_cap > 200_000_000_000 else \
+                           "Mid Cap" if stock_data.market_cap > 50_000_000_000 else "Small Cap"
+
+        risk_reward_ratio = round(stock_data.avg_annual_return / stock_data.volatility_index, 2) if stock_data.volatility_index else "N/A"
+        beta_interpretation = (
+            "Highly Volatile" if stock_data.beta > 1.5 else
+            "Moderately Volatile" if stock_data.beta > 1 else
+            "Stable"
+        )
 
         return {
-            "Name": stock_data.name,
-            "Sector": stock_data.sector,
-            "Risk Level": stock_data.estimated_risk,
-            "Beta": stock_data.beta,
-            "Market Cap": f"${stock_data.market_cap / 1e9:.2f} Billion",
-            "Volatility Index": stock_data.volatility_index,
-            "Average Annual Return": f"{stock_data.avg_annual_return * 100:.2f}%",
-            "Risk Explanation": risk_explanations.get(stock_data.estimated_risk, 'N/A')
+            "Basic Information": {
+                "Name": stock_data.name,
+                "Sector": stock_data.sector,
+                "Market Cap": f"${stock_data.market_cap / 1e9:.2f} Billion",
+                "Market Cap Category": relative_market_size
+            },
+            "Risk Metrics": {
+                "Risk Level": stock_data.estimated_risk,
+                "Beta": stock_data.beta,
+                "Beta Interpretation": beta_interpretation,
+                "Volatility Index": stock_data.volatility_index,
+                "Risk/Reward Ratio": risk_reward_ratio
+            },
+            "Performance Metrics": {
+                "Average Annual Return": f"{stock_data.avg_annual_return * 100:.2f}%",
+                "Market Performance": "Above Market" if stock_data.beta > 1 else "Below Market",
+            },
+            "Risk Analysis": {
+                "Risk Explanation": risk_explanation
+            }
         }
 
 class Agent:
