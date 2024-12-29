@@ -3,3 +3,4 @@ streamlit
 python-dotenv
 typing-extensions
 dataclasses
+pathlib

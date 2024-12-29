@@ -1,0 +1,41 @@
+Recommended Tech Stack
+Frontend:
+React.js: For a modern, dynamic user interface.
+Vite.js: For fast build times and development.
+Axios: For making API calls to the backend.
+Backend:
+Flask or FastAPI: Lightweight Python frameworks, perfect for exposing your AI agent’s functionality via RESTful APIs.
+Uvicorn (if using FastAPI): For running the backend.
+Hosting:
+Frontend: Vercel (easy deployment of React apps).
+Backend: Render or Railway (free plans available for small projects).
+
+Additional Enhancements
+Authentication: Use OAuth2 or JWT to secure the Groq API and frontend.
+Real-Time Updates: Add WebSocket or polling to show updated recommendations.
+Visualization: Display interactive portfolio data using D3.js or Plotly.
+
+
+# Idea List
+- Adding RAG based chat for content and messages -> historical context [More chatting and insights]
+- Adding two README one for installation and demo 2nd for React agent basics
+- Increasing size of stock profile json file -> or expand to use stock api instead -> a code => have to change risk mapping to file instead in recommend tool
+- Expand and improve on system prompt
+- Allow Graph fetching for stocks risk profile
+- Change streamlit UI -> to show more queries => make detailed list about types of queries that could be passed for depending upon the level of challenge for the agent
+
+#) Issues
+- Observation sometimes go stray 
+- Answer can be generated in ** format and secondly if there is new line in the Answer it doesn't display that
+- Add a list of supported stocks
+- Observation working to get the tool output is finicky, something to ensure that it is exact
+- recommend_portfolio_adjustments system prompt is too generic and doesn't catch up the understanding that it should be picking the output from the tool result and not making it's own
+- Adherence to the observation and rules is the issue.
+- Double check the results generated in observation -> hallucinations
+- Multi-step tool calling
+
+#) Lessons
+- Take basic Youtube video tutorial and make it your own with your own spin to it.
+- It is important to finish a project -> rather than starting a new one, cause previous got too ambitious
+
+- Remember to finish it as low-end product is better than keeping it unfinished
